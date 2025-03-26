@@ -1383,26 +1383,6 @@ color: rgb(152,251,152);
      </widget>
     </item>
     <item>
-     <widget class="QPushButton" name="Btn_GyroMode">
-      <property name="geometry">
-         <rect>
-         <x>600</x>
-         <y>520</y>
-         <width>90</width>
-         <height>30</height>
-         </rect>
-      </property>
-      <property name="font">
-         <font>
-         <family>Malgun Gothic</family>
-         <pointsize>10</pointsize>
-         </font>
-      </property>
-      <property name="text">
-         <string>Gyro Mode</string>
-      </property>
-      </widget>
-
      <widget class="QRadioButton" name="Btn_Mode3">
       <property name="font">
        <font>
@@ -1415,8 +1395,21 @@ color: rgb(152,251,152);
       </property>
      </widget>
     </item>
+    <item>
+     <widget class="QPushButton" name="Btn_GyroMode">
+      <property name="font">
+       <font>
+        <family>Malgun Gothic</family>
+        <pointsize>10</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>Gyro Mode</string>
+      </property>
+     </widget>
+    </item>
    </layout>
-  </widget>
+  </widget> 
   <widget class="QPushButton" name="Btn_Tracking_Faces">
    <property name="geometry">
     <rect>
