@@ -8,6 +8,8 @@ import io
 import time
 import imghdr
 import sys
+import asyncio
+import threading
 from threading import Timer
 from threading import Thread
 from PIL import Image
@@ -19,6 +21,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
+from gyroscope import DeviceModel 
 
 
 class ProgBar(QObject):
@@ -40,6 +43,10 @@ class mywindow(QMainWindow, Ui_Client):
         global timer
         super(mywindow, self).__init__()
         self.setupUi(self)
+        self.gyro_enabled = False
+        self.gyro = None
+        self.gyro_thread = None
+        self.Btn_GyroMode.clicked.connect(self.toggle_gyro_mode)
         self.endChar = '\n'
         self.intervalChar = '#'
         file = open('IP.txt', 'r')
@@ -207,6 +214,75 @@ class mywindow(QMainWindow, Ui_Client):
 
         self.L = SigStr()
         self.L.sigStr.connect(self.onLightChanged)
+
+    def toggle_gyro_mode(self):
+        """Toggle gyroscope control mode on/off."""
+        if not self.gyro_enabled:
+            self.gyro_enabled = True
+            self.Btn_GyroMode.setText("Gyro: ON")
+            # Replace with the actual BLE device identifier for your watch
+            ble_device = "YOUR_WATCH_BLE_ADDRESS_OR_INSTANCE"
+            self.start_gyro_control(ble_device)
+        else:
+            self.gyro_enabled = False
+            self.Btn_GyroMode.setText("Gyro: OFF")
+            if self.gyro:
+                self.gyro.closeDevice()
+
+    def start_gyro_control(self, ble_device):
+        """Instantiate the gyroscope and start its BLE loop in a separate thread."""
+        self.gyro = DeviceModel("Gyro", ble_device, self.gyro_callback)
+        self.gyro_thread = threading.Thread(target=self.run_gyro_loop, daemon=True)
+        self.gyro_thread.start()
+
+    def run_gyro_loop(self):
+        """Run the gyroscope BLE loop in an asyncio event loop."""
+        asyncio.run(self.gyro.openDevice())
+
+    def gyro_callback(self, gyro_device):
+        """
+        This callback is triggered when new gyroscope data is available from the watch.
+        It retrieves all sensor values and uses independent if statements to trigger the corresponding
+        directional button functions based on specific thresholds.
+        """
+        # Retrieve sensor values
+        acc_x = gyro_device.get("AccX")
+        acc_y = gyro_device.get("AccY")
+        acc_z = gyro_device.get("AccZ")
+        as_x = gyro_device.get("AsX")
+        as_y = gyro_device.get("AsY")
+        as_z = gyro_device.get("AsZ")
+        ac = gyro_device.get("AccX")
+        ang_x = gyro_device.get("AngX")
+        ang_y = gyro_device.get("AngY")
+        ang_z = gyro_device.get("AngZ")
+        hx    = gyro_device.get("Hx")
+        hy    = gyro_device.get("Hy")
+        hz    = gyro_device.get("Hz")
+
+        # Check for move forward condition:
+        # Example: if ang_x is high and asx indicates a fast forward motion
+        if ang_x is not None and asx is not None:
+            if ang_x > 30 and asx > 20:
+                self.on_btn_ForWard()
+
+        # Check for move left condition:
+        # Example: if ang_y is strongly negative (tilt left) and another variable supports this motion
+        if ang_y is not None and asy is not None:
+            if ang_y < -10 and asy > 30:
+                self.on_btn_Turn_Left()
+
+        # Check for move right condition:
+        # Example: if ang_y is strongly positive (tilt right) and asy supports that
+        if ang_y is not None and asy is not None:
+            if ang_y > 10 and asy > 30:
+                self.on_btn_Turn_Right()
+
+        # Check for move backward condition:
+        # Example: if ang_x is strongly negative and asx indicates backward motion
+        if ang_x is not None and asx is not None:
+            if ang_x < -30 and asx < -20:
+                self.on_btn_BackWard()
 
     def onPbChanged(self, value):
         self.progress_Power.setValue(value)
