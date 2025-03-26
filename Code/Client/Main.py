@@ -221,7 +221,7 @@ class mywindow(QMainWindow, Ui_Client):
             self.gyro_enabled = True
             self.Btn_GyroMode.setText("Gyro: ON")
             # Replace with the actual BLE device identifier for your watch
-            ble_device = "YOUR_WATCH_BLE_ADDRESS_OR_INSTANCE"
+            ble_device = "DA:A8:CD:3E:39:82"
             self.start_gyro_control(ble_device)
         else:
             self.gyro_enabled = False
@@ -262,8 +262,8 @@ class mywindow(QMainWindow, Ui_Client):
 
         # Check for move forward condition:
         # Example: if ang_x is high and asx indicates a fast forward motion
-        if ang_x is not None and asx is not None:
-            if ang_x > 30 and asx > 20:
+        if as_y is not None and ang_y is not None:
+            if (as_y > 130 or as_y < -130) and ang_y > 40:
                 self.on_btn_ForWard()
 
         # Check for move left condition:
@@ -280,8 +280,8 @@ class mywindow(QMainWindow, Ui_Client):
 
         # Check for move backward condition:
         # Example: if ang_x is strongly negative and asx indicates backward motion
-        if ang_x is not None and asx is not None:
-            if ang_x < -30 and asx < -20:
+        if as_y is not None and ang_y is not None:
+            if (as_y < -105 or as_y > 113) and ang_y < -22:
                 self.on_btn_BackWard()
 
     def onPbChanged(self, value):
