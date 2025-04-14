@@ -21,7 +21,9 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
-from gyroscope import DeviceModel 
+from gyroscope import DeviceModel
+from bleak import BleakScanner
+
 
 
 class ProgBar(QObject):
@@ -203,7 +205,6 @@ class mywindow(QMainWindow, Ui_Client):
 
         self.Window_Min.clicked.connect(self.windowMinimumed)
         self.Window_Close.clicked.connect(self.close)
-        self.timer = QTimer(self)
         self.timer.timeout.connect(self.time)
 
         self.Pb = ProgBar()
@@ -214,75 +215,115 @@ class mywindow(QMainWindow, Ui_Client):
 
         self.L = SigStr()
         self.L.sigStr.connect(self.onLightChanged)
+        self.latest_acc_x = None
+        self.latest_acc_y = None
+        self.latest_acc_z = None
+        self.latest_as_x = None
+        self.latest_as_y = None
+        self.latest_as_z = None
+        self.latest_ang_x = None
+        self.latest_ang_y = None
+        self.latest_ang_z = None
+        self.latest_hx = None
+        self.latest_hy = None
+        self.latest_hz = None
 
     def toggle_gyro_mode(self):
-        """Toggle gyroscope control mode on/off."""
         if not self.gyro_enabled:
             self.gyro_enabled = True
             self.Btn_GyroMode.setText("Gyro: ON")
-            # Replace with the actual BLE device identifier for your watch
-            ble_device = "DA:A8:CD:3E:39:82"
-            self.start_gyro_control(ble_device)
+            self.start_gyro_control()
+            self.sensor_loop_thread = threading.Thread(target=self.sensor_loop, daemon=True)
+            self.sensor_loop_thread.start()
         else:
             self.gyro_enabled = False
             self.Btn_GyroMode.setText("Gyro: OFF")
             if self.gyro:
                 self.gyro.closeDevice()
 
-    def start_gyro_control(self, ble_device):
-        """Instantiate the gyroscope and start its BLE loop in a separate thread."""
-        self.gyro = DeviceModel("Gyro", ble_device, self.gyro_callback)
+
+    def start_gyro_control(self):
+        """Start a thread that scans and connects to your gyroscope via BLE."""
         self.gyro_thread = threading.Thread(target=self.run_gyro_loop, daemon=True)
         self.gyro_thread.start()
 
     def run_gyro_loop(self):
-        """Run the gyroscope BLE loop in an asyncio event loop."""
-        asyncio.run(self.gyro.openDevice())
+        """Run BLE scan and connect in an async loop."""
+        asyncio.run(self.scan_and_connect())
+
+    async def scan_and_connect(self):
+        gyro_device = await BleakScanner.find_device_by_address(
+            "FFE8C585-20A3-4DCA-7C74-A584DC16EAE7", timeout=15
+        )
+
+        if gyro_device:
+            print(f"Found Gyro device: {gyro_device.address}")
+            self.gyro = DeviceModel("Gyro", gyro_device, self.gyro_callback)
+            await self.gyro.openDevice()
+        else:
+            print("Gyro device not found even by direct address.")
+
 
     def gyro_callback(self, gyro_device):
-        """
-        This callback is triggered when new gyroscope data is available from the watch.
-        It retrieves all sensor values and uses independent if statements to trigger the corresponding
-        directional button functions based on specific thresholds.
-        """
-        # Retrieve sensor values
-        acc_x = gyro_device.get("AccX")
-        acc_y = gyro_device.get("AccY")
-        acc_z = gyro_device.get("AccZ")
-        as_x = gyro_device.get("AsX")
-        as_y = gyro_device.get("AsY")
-        as_z = gyro_device.get("AsZ")
-        ac = gyro_device.get("AccX")
-        ang_x = gyro_device.get("AngX")
-        ang_y = gyro_device.get("AngY")
-        ang_z = gyro_device.get("AngZ")
-        hx    = gyro_device.get("Hx")
-        hy    = gyro_device.get("Hy")
-        hz    = gyro_device.get("Hz")
+        # Get latest sensor values
+        self.latest_acc_x = gyro_device.get("AccX")
+        self.latest_acc_y = gyro_device.get("AccY")
+        self.latest_acc_z = gyro_device.get("AccZ")
+        self.latest_as_x = gyro_device.get("AsX")
+        self.latest_as_y = gyro_device.get("AsY")
+        self.latest_as_z = gyro_device.get("AsZ")
+        self.latest_ang_x = gyro_device.get("AngX")
+        self.latest_ang_y = gyro_device.get("AngY")
+        self.latest_ang_z = gyro_device.get("AngZ")
+        self.latest_hx    = gyro_device.get("Hx")
+        self.latest_hy    = gyro_device.get("Hy")
+        self.latest_hz    = gyro_device.get("Hz")
 
-        # Check for move forward condition:
-        # Example: if ang_x is high and asx indicates a fast forward motion
-        if as_y is not None and ang_y is not None:
-            if (as_y > 130 or as_y < -130) and ang_y > 40:
+
+    def sensor_loop(self):
+        """Continuously evaluate sensor data in a while loop while gyro mode is active."""
+        while self.gyro_enabled:
+            current_time = time.time()
+            # Print sensor values every 3 seconds for debugging
+            if current_time - self.last_print >= 3:
+                print(f"Sensor Values:\n"
+                      f"  AccX: {self.latest_acc_x}, AccY: {self.latest_acc_y}, AccZ: {self.latest_acc_z}\n"
+                      f"  AsX:  {self.latest_as_x}, AsY: {self.latest_as_y}, AsZ: {self.latest_as_z}\n"
+                      f"  AngX: {self.latest_ang_x}, AngY: {self.latest_ang_y}, AngZ: {self.latest_ang_z}\n"
+                      f"  Hx:   {self.latest_hx}, Hy: {self.latest_hy}, Hz: {self.latest_hz}")
+                self.last_print = current_time
+
+            # Default command is 'stop'
+            new_command = "stop"
+
+            # Use AngY for forward/backward decisions
+            if self.latest_ang_y is not None:
+                if self.latest_ang_y < -50:
+                    new_command = "forward"
+                elif self.latest_ang_y > 30:
+                    new_command = "backward"
+
+            # If still stop, then check AngZ for left/right turns
+            if new_command == "stop" and self.latest_ang_z is not None:
+                if 70 < self.latest_ang_z < 140:
+                    new_command = "left"
+                elif -50 < self.latest_ang_z < 20:
+                    new_command = "right"
+
+            # Execute the appropriate command
+            if new_command == "forward":
                 self.on_btn_ForWard()
-
-        # Check for move left condition:
-        # Example: if ang_y is strongly negative (tilt left) and another variable supports this motion
-        if ang_y is not None and asy is not None:
-            if ang_y < -10 and asy > 30:
-                self.on_btn_Turn_Left()
-
-        # Check for move right condition:
-        # Example: if ang_y is strongly positive (tilt right) and asy supports that
-        if ang_y is not None and asy is not None:
-            if ang_y > 10 and asy > 30:
-                self.on_btn_Turn_Right()
-
-        # Check for move backward condition:
-        # Example: if ang_x is strongly negative and asx indicates backward motion
-        if as_y is not None and ang_y is not None:
-            if (as_y < -105 or as_y > 113) and ang_y < -22:
+            elif new_command == "backward":
                 self.on_btn_BackWard()
+            elif new_command == "left":
+                self.on_btn_Turn_Left()
+            elif new_command == "right":
+                self.on_btn_Turn_Right()
+            else:
+                self.on_btn_Stop()
+
+            # Sleep for 100 ms to avoid busy-waiting
+            time.sleep(0.1)
 
     def onPbChanged(self, value):
         self.progress_Power.setValue(value)
