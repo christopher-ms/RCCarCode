@@ -205,7 +205,6 @@ class mywindow(QMainWindow, Ui_Client):
 
         self.Window_Min.clicked.connect(self.windowMinimumed)
         self.Window_Close.clicked.connect(self.close)
-        self.timer.timeout.connect(self.time)
 
         self.Pb = ProgBar()
         self.Pb.sigPB.connect(self.onPbChanged)
@@ -227,6 +226,7 @@ class mywindow(QMainWindow, Ui_Client):
         self.latest_hx = None
         self.latest_hy = None
         self.latest_hz = None
+        self.last_print = time.time()
 
     def toggle_gyro_mode(self):
         if not self.gyro_enabled:
@@ -305,10 +305,16 @@ class mywindow(QMainWindow, Ui_Client):
 
             # If still stop, then check AngZ for left/right turns
             if new_command == "stop" and self.latest_ang_z is not None:
-                if 70 < self.latest_ang_z < 140:
+                if 90 < self.latest_ang_z < 140:
                     new_command = "left"
                 elif -50 < self.latest_ang_z < 20:
                     new_command = "right"
+            
+            if new_command == "stop" and self.latest_ang_x is not None:
+                if -120 < self.latest_ang_x < -80:
+                    new_command = "tleft"
+                elif 10 < self.latest_ang_x < 50:
+                    new_command = "tright"
 
             # Execute the appropriate command
             if new_command == "forward":
@@ -316,9 +322,13 @@ class mywindow(QMainWindow, Ui_Client):
             elif new_command == "backward":
                 self.on_btn_BackWard()
             elif new_command == "left":
-                self.on_btn_Turn_Left()
+                self.on_btn_Moveleft()
             elif new_command == "right":
+                self.on_btn_Moveright()
+            elif new_command == "tright":
                 self.on_btn_Turn_Right()
+            elif new_command == "tleft":
+                self.on_btn_Turn_Left()
             else:
                 self.on_btn_Stop()
 
@@ -536,11 +546,11 @@ class mywindow(QMainWindow, Ui_Client):
     def on_btn_Turn_Left(self):
         if self.Wheel_Flag:
             M_Turn_Left = self.intervalChar + str(0) + self.intervalChar + str(0) + self.intervalChar + str(
-                90) + self.intervalChar + str(1500) + self.endChar
+                90) + self.intervalChar + str(540) + self.endChar
             self.TCP.sendData(cmd.CMD_M_MOTOR + M_Turn_Left)
         else:
-            Turn_Left = self.intervalChar + str(-1500) + self.intervalChar + str(-1500) + self.intervalChar + str(
-                1500) + self.intervalChar + str(1500) + self.endChar
+            Turn_Left = self.intervalChar + str(-540) + self.intervalChar + str(-540) + self.intervalChar + str(
+                540) + self.intervalChar + str(540) + self.endChar
             self.TCP.sendData(cmd.CMD_MOTOR + Turn_Left)
 
     def on_btn_BackWard(self):
@@ -561,11 +571,11 @@ class mywindow(QMainWindow, Ui_Client):
     def on_btn_Turn_Right(self):
         if self.Wheel_Flag:
             M_Turn_Right = self.intervalChar + str(0) + self.intervalChar + str(0) + self.intervalChar + str(
-                -90) + self.intervalChar + str(1500) + self.endChar
+                -90) + self.intervalChar + str(540) + self.endChar
             self.TCP.sendData(cmd.CMD_M_MOTOR + M_Turn_Right)
         else:
-            Turn_Right = self.intervalChar + str(1500) + self.intervalChar + str(1500) + self.intervalChar + str(
-                -1500) + self.intervalChar + str(-1500) + self.endChar
+            Turn_Right = self.intervalChar + str(540) + self.intervalChar + str(540) + self.intervalChar + str(
+                -540) + self.intervalChar + str(-540) + self.endChar
             self.TCP.sendData(cmd.CMD_MOTOR + Turn_Right)
 
     def on_btn_Stop(self):
@@ -681,10 +691,8 @@ class mywindow(QMainWindow, Ui_Client):
 
     def on_btn_video(self):
         if self.Btn_Video.text() == 'Open Video':
-            self.timer.start(34)
             self.Btn_Video.setText('Close Video')
         elif self.Btn_Video.text() == 'Close Video':
-            self.timer.stop()
             self.Btn_Video.setText('Open Video')
 
     def on_btn_Up(self):
@@ -898,7 +906,6 @@ class mywindow(QMainWindow, Ui_Client):
             self.TCP.StopTcpcClient()
 
     def close(self):
-        self.timer.stop()
         try:
             stop_thread(self.recv)
             stop_thread(self.streaming)
